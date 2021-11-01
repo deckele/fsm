@@ -11,7 +11,7 @@ export class FSM {
     this.state = initialState;
     this.context = context;
     this.states = states;
-    this.notifyStateChanged(this.initialState);
+    this.notifyStateChanged();
   }
   transition(transitionName: string): void {
     const currentTransitions = this.states[this.state];
@@ -20,17 +20,17 @@ export class FSM {
       this.error = `Error: Can't transition from state: "${this.state}" to state: "${transitionName}"`;
       // Error current state hook
       currentTransitions.onError?.(this.context, this.transition.bind(this));
-      this.notifyStateError(this.error);
+      this.notifyStateError();
       return;
     }
     // Leave current state hook
     currentTransitions.onLeave?.(this.context, this.transition.bind(this));
     this.state = nextState;
-    this.notifyStateChanged(nextState);
+    this.notifyStateChanged();
   }
-  private notifyStateChanged(nextState: string): void {
+  private notifyStateChanged(): void {
     // Enter next state hook
-    this.states[nextState].onEnter?.(this.context, this.transition.bind(this));
+    this.states[this.state].onEnter?.(this.context, this.transition.bind(this));
     this.transitionSubscribers.forEach((handler) =>
       handler(this.state, this.context)
     );
@@ -41,8 +41,10 @@ export class FSM {
       );
     }
   }
-  private notifyStateError(error: string): void {
-    this.errorSubscribers.forEach((handler) => handler(error, this.context));
+  private notifyStateError(): void {
+    this.errorSubscribers.forEach((handler) =>
+      handler(this.error, this.context)
+    );
   }
   getState(): string {
     return this.state;
@@ -58,7 +60,11 @@ export class FSM {
     onError?: FSMTransitionError
   ): void {
     this.transitionSubscribers.add(onTransition);
-    if (onError) this.errorSubscribers.add(onError);
+    onTransition(this.state, this.context);
+    if (onError) {
+      this.errorSubscribers.add(onError);
+      onError(this.error, this.context);
+    }
   }
   unsubscribe(
     onTransition: FSMTransitionHandler,
